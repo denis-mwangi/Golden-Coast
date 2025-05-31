@@ -30,7 +30,7 @@
 
    </div>
 
-   <div class="credit">&copy; copyright @ 2022 by mr. web designer | all rights reseved!</div>
+   <div class="credit">&copy; copyright @ 2025 Golden Coast Hotel | all rights reseved!</div>
 
 </section>
 
