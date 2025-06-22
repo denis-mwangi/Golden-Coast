@@ -13,23 +13,39 @@ if(isset($_POST['check'])){
 
    $check_in = $_POST['check_in'];
    $check_in = filter_var($check_in, FILTER_SANITIZE_STRING);
+   $adults = isset($_POST['adults']) ? (int)$_POST['adults'] : 0;
+   $childs = isset($_POST['childs']) ? (int)$_POST['childs'] : 0;
+   $rooms = isset($_POST['rooms']) ? (int)$_POST['rooms'] : 1;
 
-   $total_rooms = 0;
+   $today = date('Y-m-d');
 
-   $check_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE check_in = ?");
-   $check_bookings->execute([$check_in]);
+   if($check_in < $today){
+      $warning_msg[] = 'Check-in date cannot be in the past.';
+   } else {
+      // Room capacity validation
+      $max_adults = $rooms * 2;
+      $max_childs = $rooms * 1;
 
-   while($fetch_bookings = $check_bookings->fetch(PDO::FETCH_ASSOC)){
-      $total_rooms += $fetch_bookings['rooms'];
+      if($adults > $max_adults || $childs > $max_childs){
+         $warning_msg[] = 'Rooms are not available. Please book more rooms.';
+      } else {
+         $total_rooms = 0;
+
+         $check_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE check_in = ?");
+         $check_bookings->execute([$check_in]);
+
+         while($fetch_bookings = $check_bookings->fetch(PDO::FETCH_ASSOC)){
+            $total_rooms += $fetch_bookings['rooms'];
+         }
+
+         // if the hotel has total 30 rooms 
+         if($total_rooms + $rooms > 30){
+            $warning_msg[] = 'rooms are not available';
+         } else {
+            $success_msg[] = 'rooms are available';
+         }
+      }
    }
-
-   // if the hotel has total 30 rooms 
-   if($total_rooms >= 30){
-      $warning_msg[] = 'rooms are not available';
-   }else{
-      $success_msg[] = 'rooms are available';
-   }
-
 }
 
 if(isset($_POST['book'])){
@@ -42,43 +58,60 @@ if(isset($_POST['book'])){
    $number = $_POST['number'];
    $number = filter_var($number, FILTER_SANITIZE_STRING);
    $rooms = $_POST['rooms'];
-   $rooms = filter_var($rooms, FILTER_SANITIZE_STRING);
+   $rooms = (int)filter_var($rooms, FILTER_SANITIZE_NUMBER_INT);
    $check_in = $_POST['check_in'];
    $check_in = filter_var($check_in, FILTER_SANITIZE_STRING);
    $check_out = $_POST['check_out'];
    $check_out = filter_var($check_out, FILTER_SANITIZE_STRING);
-   $adults = $_POST['adults'];
-   $adults = filter_var($adults, FILTER_SANITIZE_STRING);
-   $childs = $_POST['childs'];
-   $childs = filter_var($childs, FILTER_SANITIZE_STRING);
+   $adults = isset($_POST['adults']) ? (int)$_POST['adults'] : 0;
+   $childs = isset($_POST['childs']) ? (int)$_POST['childs'] : 0;
 
-   $total_rooms = 0;
+   $today = date('Y-m-d');
 
-   $check_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE check_in = ?");
-   $check_bookings->execute([$check_in]);
+   if($check_in < $today){
+      $warning_msg[] = 'Check-in date cannot be in the past.';
+   } elseif($check_out < $check_in){
+      $warning_msg[] = 'Check-out date cannot be before check-in date.';
+   } else {
+      // Room capacity validation
+      $max_adults = $rooms * 2;
+      $max_childs = $rooms * 1;
 
-   while($fetch_bookings = $check_bookings->fetch(PDO::FETCH_ASSOC)){
-      $total_rooms += $fetch_bookings['rooms'];
-   }
+      if($adults > $max_adults || $childs > $max_childs){
+         $warning_msg[] = 'Too many guests for selected rooms. Max 2 adults and 1 child per room allowed.';
+      } else {
 
-   if($total_rooms >= 30){
-      $warning_msg[] = 'rooms are not available';
-   }else{
+         $total_rooms = 0;
 
-      $verify_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE user_id = ? AND name = ? AND email = ? AND number = ? AND rooms = ? AND check_in = ? AND check_out = ? AND adults = ? AND childs = ?");
-      $verify_bookings->execute([$user_id, $name, $email, $number, $rooms, $check_in, $check_out, $adults, $childs]);
+         $check_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE check_in = ?");
+         $check_bookings->execute([$check_in]);
 
-      if($verify_bookings->rowCount() > 0){
-         $warning_msg[] = 'room booked alredy!';
-      }else{
-         $book_room = $conn->prepare("INSERT INTO `bookings`(booking_id, user_id, name, email, number, rooms, check_in, check_out, adults, childs) VALUES(?,?,?,?,?,?,?,?,?,?)");
-         $book_room->execute([$booking_id, $user_id, $name, $email, $number, $rooms, $check_in, $check_out, $adults, $childs]);
-         $success_msg[] = 'room booked successfully!';
+         while($fetch_bookings = $check_bookings->fetch(PDO::FETCH_ASSOC)){
+            $total_rooms += $fetch_bookings['rooms'];
+         }
+
+         if($total_rooms + $rooms > 30){
+            $warning_msg[] = 'rooms are not available';
+         } else {
+
+            $verify_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE user_id = ? AND name = ? AND email = ? AND number = ? AND rooms = ? AND check_in = ? AND check_out = ? AND adults = ? AND childs = ?");
+            $verify_bookings->execute([$user_id, $name, $email, $number, $rooms, $check_in, $check_out, $adults, $childs]);
+
+            if($verify_bookings->rowCount() > 0){
+               $warning_msg[] = 'room booked already!';
+            } else {
+               $book_room = $conn->prepare("INSERT INTO `bookings`(booking_id, user_id, name, email, number, rooms, check_in, check_out, adults, childs) VALUES(?,?,?,?,?,?,?,?,?,?)");
+               $book_room->execute([$booking_id, $user_id, $name, $email, $number, $rooms, $check_in, $check_out, $adults, $childs]);
+               $success_msg[] = 'room booked successfully!';
+            }
+
+         }
       }
-
    }
-
 }
+
+
+
 
 if(isset($_POST['send'])){
 
@@ -170,7 +203,6 @@ if(isset($_POST['send'])){
 </section>
 
 <!-- home section ends -->
-
 <!-- availability section starts  -->
 
 <section class="availability" id="availability">
@@ -179,7 +211,7 @@ if(isset($_POST['send'])){
       <div class="flex">
          <div class="box">
             <p>check in <span>*</span></p>
-            <input type="date" name="check_in" class="input" required>
+            <input type="date" name="check_in" class="input" required min="<?= date('Y-m-d'); ?>">
          </div>
          <div class="box">
             <p>check out <span>*</span></p>
@@ -187,7 +219,7 @@ if(isset($_POST['send'])){
          </div>
          <div class="box">
             <p>adults <span>*</span></p>
-            <select name="adults" class="input" required>
+            <select name="adults" class="input" id="adults" required onchange="suggestRooms()">
                <option value="1">1 adult</option>
                <option value="2">2 adults</option>
                <option value="3">3 adults</option>
@@ -198,8 +230,8 @@ if(isset($_POST['send'])){
          </div>
          <div class="box">
             <p>childs <span>*</span></p>
-            <select name="childs" class="input" required>
-               <option value="-">0 child</option>
+            <select name="childs" class="input" id="childs" required onchange="suggestRooms()">
+               <option value="0">0 child</option>
                <option value="1">1 child</option>
                <option value="2">2 childs</option>
                <option value="3">3 childs</option>
@@ -210,7 +242,7 @@ if(isset($_POST['send'])){
          </div>
          <div class="box">
             <p>rooms <span>*</span></p>
-            <select name="rooms" class="input" required>
+            <select name="rooms" class="input" id="rooms" required>
                <option value="1">1 room</option>
                <option value="2">2 rooms</option>
                <option value="3">3 rooms</option>
@@ -224,8 +256,6 @@ if(isset($_POST['send'])){
    </form>
 
 </section>
-
-<!-- availability section ends -->
 
 <!-- about section starts  -->
 
@@ -337,7 +367,7 @@ if(isset($_POST['send'])){
          </div>
          <div class="box">
             <p>rooms <span>*</span></p>
-            <select name="rooms" class="input" required>
+            <select name="rooms" class="input" id="res_rooms" required>
                <option value="1" selected>1 room</option>
                <option value="2">2 rooms</option>
                <option value="3">3 rooms</option>
@@ -348,7 +378,7 @@ if(isset($_POST['send'])){
          </div>
          <div class="box">
             <p>check in <span>*</span></p>
-            <input type="date" name="check_in" class="input" required>
+            <input type="date" name="check_in" class="input" min="<?= date('Y-m-d'); ?>" required>
          </div>
          <div class="box">
             <p>check out <span>*</span></p>
@@ -356,7 +386,7 @@ if(isset($_POST['send'])){
          </div>
          <div class="box">
             <p>adults <span>*</span></p>
-            <select name="adults" class="input" required>
+            <select name="adults" class="input" id="res_adults" required onchange="suggestReservationRooms()">
                <option value="1" selected>1 adult</option>
                <option value="2">2 adults</option>
                <option value="3">3 adults</option>
@@ -367,7 +397,7 @@ if(isset($_POST['send'])){
          </div>
          <div class="box">
             <p>childs <span>*</span></p>
-            <select name="childs" class="input" required>
+            <select name="childs" class="input" id="res_childs" required onchange="suggestReservationRooms()">
                <option value="0" selected>0 child</option>
                <option value="1">1 child</option>
                <option value="2">2 childs</option>
@@ -515,6 +545,51 @@ if(isset($_POST['send'])){
 
 <!-- custom js file link  -->
 <script src="js/script.js"></script>
+<script>
+function suggestRooms() {
+   const adults = parseInt(document.getElementById('adults').value) || 0;
+   const childs = parseInt(document.getElementById('childs').value) || 0;
+
+   const roomsForAdults = Math.ceil(adults / 2);
+   const roomsForChildren = Math.ceil(childs / 1);
+
+   const suggestedRooms = Math.max(roomsForAdults, roomsForChildren);
+
+   const roomsSelect = document.getElementById('rooms');
+   const options = roomsSelect.options;
+
+   // Select the option that matches the suggested number of rooms
+   for (let i = 0; i < options.length; i++) {
+      if (parseInt(options[i].value) === suggestedRooms) {
+         roomsSelect.selectedIndex = i;
+         break;
+      }
+   }
+}
+</script>
+
+<!-- JavaScript for room suggestion in reservation section -->
+<script>
+function suggestReservationRooms() {
+   const adults = parseInt(document.getElementById('res_adults').value) || 0;
+   const childs = parseInt(document.getElementById('res_childs').value) || 0;
+
+   const roomsForAdults = Math.ceil(adults / 2);
+   const roomsForChildren = Math.ceil(childs / 1);
+
+   const suggestedRooms = Math.max(roomsForAdults, roomsForChildren);
+
+   const roomsSelect = document.getElementById('res_rooms');
+   const options = roomsSelect.options;
+
+   for (let i = 0; i < options.length; i++) {
+      if (parseInt(options[i].value) === suggestedRooms) {
+         roomsSelect.selectedIndex = i;
+         break;
+      }
+   }
+}
+</script>
 
 <?php include 'components/message.php'; ?>
 
