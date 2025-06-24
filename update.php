@@ -1,65 +1,110 @@
-<section class="reservation" id="reservation">
-   <form action="" method="post">
-      <h3>make a reservation</h3>
-      <div class="flex">
-         <div class="box">
-            <p>your name <span>*</span></p>
-            <input type="text" name="name" maxlength="50" required placeholder="enter your name" class="input">
-         </div>
-         <div class="box">
-            <p>your email <span>*</span></p>
-            <input type="email" name="email" maxlength="50" required placeholder="enter your email" class="input">
-         </div>
-         <div class="box">
-            <p>your number <span>*</span></p>
-            <input type="number" name="number" maxlength="10" min="0" max="9999999999" required placeholder="enter your number" class="input">
-         </div>
-         <div class="box">
-            <p>rooms <span>*</span></p>
-            <select name="rooms" class="input" id="res_rooms" required onchange="updateReservationPrice()">
-               <option value="1" selected>1 room</option>
-               <option value="2">2 rooms</option>
-               <option value="3">3 rooms</option>
-               <option value="4">4 rooms</option>
-               <option value="5">5 rooms</option>
-               <option value="6">6 rooms</option>
-            </select>
-         </div>
-         <div class="box">
-            <p>check in <span>*</span></p>
-            <input type="date" name="check_in" class="input" min="<?= date('Y-m-d'); ?>" required id="res_check_in">
-         </div>
-         <div class="box">
-            <p>check out <span>*</span></p>
-            <input type="date" name="check_out" class="input" required id="res_check_out">
-         </div>
-         <div class="box">
-            <p>adults <span>*</span></p>
-            <select name="adults" class="input" id="res_adults" required onchange="suggestReservationRooms()">
-               <option value="1" selected>1 adult</option>
-               <option value="2">2 adults</option>
-               <option value="3">3 adults</option>
-               <option value="4">4 adults</option>
-               <option value="5">5 adults</option>
-               <option value="6">6 adults</option>
-            </select>
-         </div>
-         <div class="box">
-            <p>childs <span>*</span></p>
-            <select name="childs" class="input" id="res_childs" required onchange="suggestReservationRooms()">
-               <option value="0" selected>0 child</option>
-               <option value="2">2 childs</option>
-               <option value="3">3 childs</option>
-               <option value="4">4 childs</option>
-               <option value="5">5 childs</option>
-               <option value="6">6 childs</option>
-            </select>
-         </div>
-         <div class="box">
-            <p>total price <span>*</span></p>
-            <input type="text" name="total_price" class="input" id="reservation_price" readonly value="ksh 0.00">
-         </div>
-      </div>
-      <input type="submit" value="book now" name="book" class="btn">
-   </form>
+<?php
+include '../components/connect.php';
+
+// Ensure admin is logged in
+if (isset($_COOKIE['admin_id'])) {
+    $admin_id = filter_var($_COOKIE['admin_id'], FILTER_SANITIZE_STRING);
+} else {
+    $admin_id = '';
+    header('location:login.php');
+    exit;
+}
+
+// Handle booking deletion
+if (isset($_POST['delete'])) {
+    $delete_id = filter_var($_POST['delete_id'], FILTER_SANITIZE_STRING);
+
+    $verify_delete = $conn->prepare("SELECT * FROM `bookings` WHERE booking_id = ?");
+    $verify_delete->execute([$delete_id]);
+
+    if ($verify_delete->rowCount() > 0) {
+        $delete_bookings = $conn->prepare("DELETE FROM `bookings` WHERE booking_id = ?");
+        $delete_bookings->execute([$delete_id]);
+        $success_msg[] = 'Booking deleted!';
+    } else {
+        $warning_msg[] = 'Booking deleted already!';
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookings</title>
+
+    <!-- font awesome cdn link -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+
+    <!-- custom css file link -->
+    <link rel="stylesheet" href="../css/admin_style.css">
+</head>
+<body>
+
+<!-- header section starts -->
+<?php include '../components/admin_header.php'; ?>
+<!-- header section ends -->
+
+<!-- bookings section starts -->
+<section class="grid">
+    <h1 class="heading">Bookings</h1>
+
+    <div class="box-container">
+        <?php
+        // Fetch all bookings
+        $select_bookings = $conn->prepare("SELECT booking_id, name, email, number, check_in, check_out, rooms, adults, childs, total_price FROM `bookings`");
+        $select_bookings->execute();
+
+        if ($select_bookings->rowCount() > 0) {
+            while ($fetch_bookings = $select_bookings->fetch(PDO::FETCH_ASSOC)) {
+        ?>
+        <div class="box">
+            <p>Booking ID: <span><?= htmlspecialchars($fetch_bookings['booking_id']); ?></span></p>
+            <p>Name: <span><?= htmlspecialchars($fetch_bookings['name']); ?></span></p>
+            <p>Email: <span><?= htmlspecialchars($fetch_bookings['email']); ?></span></p>
+            <p>Number: <span><?= htmlspecialchars($fetch_bookings['number']); ?></span></p>
+            <p>Check-in: <span><?= htmlspecialchars($fetch_bookings['check_in']); ?></span></p>
+            <p>Check-out: <span><?= htmlspecialchars($fetch_bookings['check_out']); ?></span></p>
+            <p>Rooms: <span><?= htmlspecialchars($fetch_bookings['rooms']); ?></span></p>
+            <p>Adults: <span><?= htmlspecialchars($fetch_bookings['adults']); ?></span></p>
+            <p>Children: <span><?= htmlspecialchars($fetch_bookings['childs']); ?></span></p>
+            <p>Total Price: <span>
+                <?php
+                if ($fetch_bookings['total_price'] > 0) {
+                    echo '$' . number_format($fetch_bookings['total_price'], 2);
+                } else {
+                    echo 'N/A (Contact support)';
+                }
+                ?>
+            </span></p>
+            <form action="" method="POST">
+                <input type="hidden" name="delete_id" value="<?= htmlspecialchars($fetch_bookings['booking_id']); ?>">
+                <input type="submit" value="Delete Booking" onclick="return confirm('Delete this booking?');" name="delete" class="btn">
+            </form>
+        </div>
+        <?php
+            }
+        } else {
+        ?>
+        <div class="box" style="text-align: center;">
+            <p>No bookings found!</p>
+            <a href="dashboard.php" class="btn">Go to Home</a>
+        </div>
+        <?php
+        }
+        ?>
+    </div>
 </section>
+<!-- bookings section ends -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+
+<!-- custom js file link -->
+<script src="../js/admin_script.js"></script>
+
+<?php include '../components/message.php'; ?>
+
+</body>
+</html>
