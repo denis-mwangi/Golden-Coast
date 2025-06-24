@@ -1,43 +1,108 @@
-if($check_in < $today){
-      $warning_msg[] = 'Check-in date cannot be in the past.';
-   } elseif($check_out < $check_in){
-      $warning_msg[] = 'Check-out date cannot be before check-in date.';
-   } elseif($total_price <= 0){
-      $warning_msg[] = 'Invalid price. Please select valid dates and rooms.';
-   } else {
-      // Room capacity validation
-      $max_adults = $rooms * 2;
-      $max_childs = $rooms * 1;
+<?php
+include 'components/connect.php';
 
-      if($adults > $max_adults || $childs > $max_childs){
-         $warning_msg[] = 'Too many guests for selected rooms. Max 2 adults and 1 child per room allowed.';
-      } else {
-
-         $total_rooms = 0;
-
-         $check_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE check_in = ?");
-         $check_bookings->execute([$check_in]);
-
-         while($fetch_bookings = $check_bookings->fetch(PDO::FETCH_ASSOC)){
-            $total_rooms += $fetch_bookings['rooms'];
-         }
-
-         if($total_rooms + $rooms > 30){
-            $warning_msg[] = 'rooms are not available';
-         } else {
-
-            $verify_bookings = $conn->prepare("SELECT * FROM `bookings` WHERE user_id = ? AND name = ? AND email = ? AND number = ? AND rooms = ? AND check_in = ? AND check_out = ? AND adults = ? AND childs = ? AND total_price = ?");
-            $verify_bookings->execute([$user_id, $name, $email, $number, $rooms, $check_in, $check_out, $adults, $childs, $total_price]);
-
-            if($verify_bookings->rowCount() > 0){
-               $warning_msg[] = 'room booked already!';
-            } else {
-               $book_room = $conn->prepare("INSERT INTO `bookings`(booking_id, user_id, name, email, number, rooms, check_in, check_out, adults, childs, total_price) VALUES(?,?,?,?,?,?,?,?,?,?,?)");
-               $book_room->execute([$booking_id, $user_id, $name, $email, $number, $rooms, $check_in, $check_out, $adults, $childs, $total_price]);
-               $success_msg[] = 'room booked successfully!';
-            }
-
-         }
-      }
-   }
+// Ensure user is logged in
+if (isset($_COOKIE['user_id'])) {
+    $user_id = filter_var($_COOKIE['user_id'], FILTER_SANITIZE_STRING);
+} else {
+    setcookie('user_id', create_unique_id(), time() + 60*60*24*30, '/');
+    header('location:index.php');
+    exit;
 }
+
+// Handle booking cancellation
+if (isset($_POST['cancel'])) {
+    $booking_id = filter_var($_POST['booking_id'], FILTER_SANITIZE_STRING);
+
+    $verify_booking = $conn->prepare("SELECT * FROM `bookings` WHERE booking_id = ?");
+    $verify_booking->execute([$booking_id]);
+
+    if ($verify_booking->rowCount() > 0) {
+        $delete_booking = $conn->prepare("DELETE FROM `bookings` WHERE booking_id = ?");
+        $delete_booking->execute([$booking_id]);
+        $success_msg[] = 'Booking cancelled successfully!';
+    } else {
+        $warning_msg[] = 'Booking already cancelled!';
+    }
+}
+
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Bookings</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<?php include 'components/user_header.php'; ?>
+
+<!-- Booking section starts -->
+<section class="bookings">
+    <h1 class="heading">My Bookings</h1>
+
+    <div class="box-container">
+        <?php
+        // Fetch bookings for the user
+        $select_bookings = $conn->prepare("SELECT booking_id, name, email, number, check_in, check_out, rooms, adults, childs, total_price FROM `bookings` WHERE user_id = ?");
+        $select_bookings->execute([$user_id]);
+
+        if ($select_bookings->rowCount() > 0) {
+            while ($fetch_booking = $select_bookings->fetch(PDO::FETCH_ASSOC)) {
+        ?>
+        <div class="box">
+            <p>Name: <span><?= htmlspecialchars($fetch_booking['name']); ?></span></p>
+            <p>Email: <span><?= htmlspecialchars($fetch_booking['email']); ?></span></p>
+            <p>Number: <span><?= htmlspecialchars($fetch_booking['number']); ?></span></p>
+            <p>Check-in: <span><?= htmlspecialchars($fetch_booking['check_in']); ?></span></p>
+            <p>Check-out: <span><?= htmlspecialchars($fetch_booking['check_out']); ?></span></p>
+            <p>Rooms: <span><?= htmlspecialchars($fetch_booking['rooms']); ?></span></p>
+            <p>Adults: <span><?= htmlspecialchars($fetch_booking['adults']); ?></span></p>
+            <p>Children: <span><?= htmlspecialchars($fetch_booking['childs']); ?></span></p>
+            <p>Total Price: <span>
+                <?php
+                if ($fetch_booking['total_price'] > 0) {
+                    echo '$' . number_format($fetch_booking['total_price'], 2);
+                } else {
+                    echo 'N/A (Contact support)';
+                }
+                ?>
+            </span></p>
+            <p>Booking ID: <span><?= htmlspecialchars($fetch_booking['booking_id']); ?></span></p>
+            <form action="" method="POST">
+                <input type="hidden" name="booking_id" value="<?= htmlspecialchars($fetch_booking['booking_id']); ?>">
+                <input type="submit" value="Cancel Booking" name="cancel" class="btn" onclick="return confirm('Cancel this booking?');">
+            </form>
+        </div>
+        <?php
+            }
+        } else {
+        ?>
+        <div class="box" style="text-align: center;">
+            <p style="padding-bottom: .5rem; text-transform:capitalize;">No bookings found!</p>
+            <a href="index.php#reservation" class="btn">Book New</a>
+        </div>
+        <?php
+        }
+        ?>
+    </div>
+</section>
+<!-- Booking section ends -->
+
+<?php include 'components/footer.php'; ?>
+
+<script src="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+<script src="js/script.js"></script>
+
+<?php include 'components/message.php'; ?>
+
+</body>
+</html>
